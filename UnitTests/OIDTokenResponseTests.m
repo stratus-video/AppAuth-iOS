@@ -23,8 +23,8 @@
 #if SWIFT_PACKAGE
 @import AppAuthCore;
 #else
-#import "Source/AppAuthCore/OIDTokenRequest.h"
-#import "Source/AppAuthCore/OIDTokenResponse.h"
+#import "Sources/AppAuthCore/OIDTokenRequest.h"
+#import "Sources/AppAuthCore/OIDTokenResponse.h"
 #endif
 
 // Ignore warnings about "Use of GNU statement expression extension" which is raised by our use of
@@ -175,8 +175,22 @@ static NSString *const kTestAdditionalParameterValue = @"example_value";
  */
 - (void)testSecureCoding {
   OIDTokenResponse *response = [[self class] testInstance];
-  NSData *data = [NSKeyedArchiver archivedDataWithRootObject:response];
-  OIDTokenResponse *responseCopy = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+  OIDTokenResponse *responseCopy;
+  NSError *error;
+  NSData *data;
+  if (@available(iOS 12.0, macOS 10.13, tvOS 11.0, watchOS 4.0, *)) {
+    data = [NSKeyedArchiver archivedDataWithRootObject:response
+                                 requiringSecureCoding:YES
+                                                 error:&error];
+    responseCopy = [NSKeyedUnarchiver unarchivedObjectOfClass:[OIDTokenResponse class]
+                                                     fromData:data
+                                                        error:&error];
+  } else {
+#if !TARGET_OS_IOS
+    data = [NSKeyedArchiver archivedDataWithRootObject:response];
+    responseCopy = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+#endif
+  }
 
   // Not a full test of the request deserialization, but should be sufficient as a smoke test
   // to make sure the request IS actually getting serialized and deserialized in the
