@@ -24,11 +24,11 @@
 #if SWIFT_PACKAGE
 @import AppAuthCore;
 #else
-#import "Source/AppAuthCore/OIDAuthorizationRequest.h"
-#import "Source/AppAuthCore/OIDAuthorizationResponse.h"
-#import "Source/AppAuthCore/OIDScopeUtilities.h"
-#import "Source/AppAuthCore/OIDServiceConfiguration.h"
-#import "Source/AppAuthCore/OIDTokenRequest.h"
+#import "Sources/AppAuthCore/OIDAuthorizationRequest.h"
+#import "Sources/AppAuthCore/OIDAuthorizationResponse.h"
+#import "Sources/AppAuthCore/OIDScopeUtilities.h"
+#import "Sources/AppAuthCore/OIDServiceConfiguration.h"
+#import "Sources/AppAuthCore/OIDTokenRequest.h"
 #endif
 
 // Ignore warnings about "Use of GNU statement expression extension" which is raised by our use of
@@ -55,6 +55,14 @@ static NSString *const kTestAdditionalHeaderKey = @"B";
 /*! @brief Test value for the @c additionalHeaders property.
  */
 static NSString *const kTestAdditionalHeaderValue = @"2";
+
+/*! @brief Test key for the @c additionalHeaders property.
+ */
+static NSString *const kTestAdditionalHeaderKey2 = @"C";
+
+/*! @brief Test value for the @c additionalHeaders property.
+ */
+static NSString *const kTestAdditionalHeaderValue2 = @"3";
 
 @implementation OIDTokenRequestTests
 
@@ -154,6 +162,32 @@ static NSString *const kTestAdditionalHeaderValue = @"2";
   return request;
 }
 
++ (OIDTokenRequest *)testInstanceAdditionalHeaders {
+  OIDAuthorizationResponse *authResponse = [OIDAuthorizationResponseTests testInstance];
+  NSArray<NSString *> *scopesArray =
+      [OIDScopeUtilities scopesArrayWithString:authResponse.request.scope];
+  NSDictionary *additionalParameters =
+      @{ kTestAdditionalParameterKey : kTestAdditionalParameterValue };
+  NSDictionary *additionalHeaders = @{
+    kTestAdditionalHeaderKey : kTestAdditionalHeaderValue,
+    kTestAdditionalHeaderKey2 : kTestAdditionalHeaderValue2
+  };
+  
+  OIDTokenRequest *request =
+      [[OIDTokenRequest alloc] initWithConfiguration:authResponse.request.configuration
+                                           grantType:OIDGrantTypeAuthorizationCode
+                                   authorizationCode:authResponse.authorizationCode
+                                         redirectURL:authResponse.request.redirectURL
+                                            clientID:authResponse.request.clientID
+                                        clientSecret:authResponse.request.clientSecret
+                                              scopes:scopesArray
+                                        refreshToken:kRefreshTokenTestValue
+                                        codeVerifier:authResponse.request.codeVerifier
+                                additionalParameters:additionalParameters
+                                   additionalHeaders:additionalHeaders];
+  return request;
+}
+
 /*! @brief Tests the @c NSCopying implementation by round-tripping an instance through the copying
         process and checking to make sure the source and destination instances are equivalent.
  */
@@ -239,9 +273,27 @@ static NSString *const kTestAdditionalHeaderValue = @"2";
   XCTAssertNotNil(request.additionalHeaders, @"");
   XCTAssertEqualObjects(request.additionalHeaders[kTestAdditionalHeaderKey],
                         kTestAdditionalHeaderValue, @"");
+  
+  NSURLRequest *urlRequest = [request URLRequest];
+  XCTAssertEqualObjects([urlRequest.allHTTPHeaderFields objectForKey:kTestAdditionalHeaderKey],
+                        kTestAdditionalHeaderValue);
 
-  NSData *data = [NSKeyedArchiver archivedDataWithRootObject:request];
-  OIDTokenRequest *requestCopy = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+  OIDTokenRequest *requestCopy;
+  NSError *error;
+  NSData *data;
+  if (@available(iOS 12.0, macOS 10.13, tvOS 11.0, watchOS 4.0, *)) {
+    data = [NSKeyedArchiver archivedDataWithRootObject:request
+                                 requiringSecureCoding:YES
+                                                 error:&error];
+    requestCopy = [NSKeyedUnarchiver unarchivedObjectOfClass:[OIDTokenRequest class]
+                                                    fromData:data
+                                                       error:&error];
+  } else {
+#if !TARGET_OS_IOS
+    data = [NSKeyedArchiver archivedDataWithRootObject:request];
+    requestCopy = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+#endif
+  }
 
   // Not a full test of the configuration deserialization, but should be sufficient as a smoke test
   // to make sure the configuration IS actually getting serialized and deserialized in the
@@ -263,6 +315,10 @@ static NSString *const kTestAdditionalHeaderValue = @"2";
   XCTAssertNotNil(requestCopy.additionalHeaders, @"");
   XCTAssertEqualObjects(requestCopy.additionalHeaders[kTestAdditionalHeaderKey],
                         kTestAdditionalHeaderValue, @"");
+  
+  NSURLRequest *urlrequestCopy = [requestCopy URLRequest];
+  XCTAssertEqualObjects([urlrequestCopy.allHTTPHeaderFields objectForKey:kTestAdditionalHeaderKey],
+                        kTestAdditionalHeaderValue);
 }
 
 - (void)testURLRequestNoClientAuth {
@@ -300,6 +356,17 @@ static NSString *const kTestAdditionalHeaderValue = @"2";
                                                     codeVerifier:authResponse.request.codeVerifier
                                             additionalParameters:additionalParameters
                                                additionalHeaders:additionalHeaders], @"");
+}
+
+- (void)testThatAdditionalHeadersAreInTokenRequest {
+  OIDTokenRequest *request = [[self class] testInstanceAdditionalHeaders];
+  NSURLRequest* urlRequest = [request URLRequest];
+
+  XCTAssertEqualObjects([urlRequest.allHTTPHeaderFields objectForKey:kTestAdditionalHeaderKey],
+                        kTestAdditionalHeaderValue);
+  
+  XCTAssertEqualObjects([urlRequest.allHTTPHeaderFields objectForKey:kTestAdditionalHeaderKey2],
+                        kTestAdditionalHeaderValue2);
 }
 
 @end
