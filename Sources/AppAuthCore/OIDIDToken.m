@@ -33,15 +33,29 @@ static NSString *const kNonceKey = @"nonce";
 - (instancetype)initWithIDTokenString:(NSString *)idToken {
   self = [super init];
   NSArray *sections = [idToken componentsSeparatedByString:@"."];
-  
+
+    /*
+     AMN: Changes added to try to avoid attempting to decode non-JWT token strings (this caused a crash with Azure refresh tokens).
+     Below, +parseJWTSection: was changed to return nil for non-base64Url token strings
+     Here, the sections, _header & _claims checks have been changed to return nil if any are not as expected
+     Of these, +parseJWTSection: & _header checks are probably the most impactful changes.
+     */
+
   // The header and claims sections are required.
-  if (sections.count <= 1) {
+    // AMN: Changed check to exactly 3 to match JWT
+  if (sections.count != 3) {
     return nil;
   }
-  
+
+    // AMN: Validate header
   _header = [[self class] parseJWTSection:sections[0]];
+    if (!_header) {
+        return  nil;
+    }
+
+    // AMN: Validate claims exist
   _claims = [[self class] parseJWTSection:sections[1]];
-  if (!_header || !_claims) {
+  if (!_claims) {
     return nil;
   }
 
@@ -112,6 +126,11 @@ static NSString *const kNonceKey = @"nonce";
 
 + (NSDictionary *)parseJWTSection:(NSString *)sectionString {
   NSData *decodedData = [[self class] base64urlNoPaddingDecode:sectionString];
+
+    // AMN: This prevents crashes when trying to init from a non-JWT token string (e.g. Azure refresh token)
+    if (decodedData == nil) {
+        return  nil;
+    }
 
   // Parses JSON.
   NSError *error;
