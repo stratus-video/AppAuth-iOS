@@ -52,9 +52,6 @@ static NSString *const kNonceKey = @"nonce";
     if (!_header) {
         return  nil;
     }
-    else if (!_header[@"alg"] || !_header[@"typ"]) {
-        return nil;
-    }
 
     // AMN: Validate claims exist
   _claims = [[self class] parseJWTSection:sections[1]];
